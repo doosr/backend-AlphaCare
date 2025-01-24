@@ -2,7 +2,7 @@ const express = require("express");
 const mongoose = require('mongoose');
 const Utilisateur = require('./models/utilisateur'); // Assurez-vous que le chemin d'accès est correct
 const bodyParser = require('body-parser');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const jwt=require('jsonwebtoken');
 const socketIo = require('socket.io');
@@ -13,6 +13,7 @@ const Suivie = require('./models/invitation');
 const BabyData = require('./models/BabyData'); // Import du modèle d'image
 const Appointment=require('./models/Appointment');
 
+
 const cron = require('node-cron');
 const ImageModel =require('./models/image');
 // Importez le module 'path'
@@ -21,6 +22,7 @@ const app = express();
 const server = http.createServer(app);
 // Créez une instance de Socket.IO en passant le serveur HTTP créé précédemment
 const io = socketIo(server);
+
 
 // Middleware pour analyser les données de requête
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
