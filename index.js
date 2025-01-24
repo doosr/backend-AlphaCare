@@ -114,7 +114,7 @@ app.post('/registre', async (req, res) => {
         await nouvelUtilisateur.save();
 
         // Configuration du lien d'activation (utilisez votre propre domaine)
-        const activationLink = `http://35.160.120.126:5000/activation/${activationCode}`;
+        const activationLink = `https://node-xfev.onrender.com/activation/${activationCode}`;
 
         // Configuration du transporter Nodemailer
 
@@ -480,7 +480,7 @@ app.post('/upload-image', verifyToken, async (req, res) => {
       fs.writeFileSync(filePath, buffer);
   
       // Enregistrement de l'image dans la base de données
-      const imageUrl = `http://35.160.120.126:5000/uploads/${fileName}`;
+      const imageUrl = `https://node-xfev.onrender.com/uploads/${fileName}`;
   
       // Mettre à jour l'URL de l'image dans le modèle Utilisateur
       utilisateur.image = imageUrl;
