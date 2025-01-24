@@ -112,7 +112,7 @@ app.post('/registre', async (req, res) => {
         await nouvelUtilisateur.save();
 
         // Configuration du lien d'activation (utilisez votre propre domaine)
-        const activationLink = `http://192.168.1.41:5000/activation/${activationCode}`;
+        const activationLink = `http://192.168.1.119:5000/activation/${activationCode}`;
 
         // Configuration du transporter Nodemailer
 
@@ -478,7 +478,7 @@ app.post('/upload-image', verifyToken, async (req, res) => {
       fs.writeFileSync(filePath, buffer);
   
       // Enregistrement de l'image dans la base de données
-      const imageUrl = `http://192.168.1.41:5000/uploads/${fileName}`;
+      const imageUrl = `http://192.168.1.119:5000/uploads/${fileName}`;
   
       // Mettre à jour l'URL de l'image dans le modèle Utilisateur
       utilisateur.image = imageUrl;
@@ -1217,3 +1217,112 @@ app.delete('/appointments/:id', async (req, res) => {
 
 
  
+
+  // Schéma du Médecin
+const MedecinSchema = new mongoose.Schema({
+    nom: String,
+    prenom: String,
+    specialite: String,
+    email: String,
+    telephone: String,
+    adresse: String,
+    location: {
+      type: {
+        type: String,
+        default: 'Point',
+        enum: ['Point']
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        index: '2dsphere'
+      }
+    }
+  });
+  
+  // Index géospatial
+  MedecinSchema.index({ location: '2dsphere' });
+  
+  const Medecin = mongoose.model('Medecin', MedecinSchema);
+  
+  // Route de localisation des médecins
+  app.post('/medecins/proximite', async (req, res) => {
+    try {
+      const { latitude, longitude, rayonKm = 10 } = req.body;
+  
+      // Recherche des médecins dans un rayon donné
+      const medecins = await Medecin.find({
+        location: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [longitude, latitude]
+            },
+            $maxDistance: rayonKm * 1000 // Conversion km en mètres
+          }
+        }
+      }).limit(10); // Limiter à 10 résultats
+  
+      // Formater les résultats pour le frontend
+      const resultatsMedecins = medecins.map(medecin => ({
+        id: medecin._id,
+        nom: medecin.nom,
+        prenom: medecin.prenom,
+        specialite: medecin.specialite,
+        email: medecin.email,
+        telephone: medecin.telephone,
+        latitude: medecin.location.coordinates[1],
+        longitude: medecin.location.coordinates[0]
+      }));
+  
+      res.json({ 
+        medecins: resultatsMedecins,
+        total: resultatsMedecins.length
+      });
+    } catch (error) {
+      console.error('Erreur de recherche de médecins:', error);
+      res.status(500).json({ 
+        message: 'Erreur lors de la recherche de médecins' 
+      });
+    }
+  });
+  
+  // Route pour ajouter un médecin
+  app.post('/medecins', async (req, res) => {
+    try {
+      const { 
+        nom, 
+        prenom, 
+        specialite, 
+        email, 
+        telephone, 
+        adresse, 
+        latitude, 
+        longitude 
+      } = req.body;
+  
+      const nouveauMedecin = new Medecin({
+        nom,
+        prenom,
+        specialite,
+        email,
+        telephone,
+        adresse,
+        location: {
+          type: 'Point',
+          coordinates: [longitude, latitude]
+        }
+      });
+  
+      await nouveauMedecin.save();
+  
+      res.status(201).json({
+        message: 'Médecin ajouté avec succès',
+        medecin: nouveauMedecin
+      });
+    } catch (error) {
+      console.error('Erreur d\'ajout de médecin:', error);
+      res.status(500).json({ 
+        message: 'Erreur lors de l\'ajout du médecin' 
+      });
+    }
+  });
