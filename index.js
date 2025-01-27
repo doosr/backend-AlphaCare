@@ -1,7 +1,6 @@
 const express = require("express");
 const mongoose = require('mongoose');
 const Utilisateur = require('./models/utilisateur'); // Assurez-vous que le chemin d'accès est correct
-const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const jwt=require('jsonwebtoken');
@@ -12,7 +11,6 @@ const path = require('path');
 const Suivie = require('./models/invitation');
 const BabyData = require('./models/BabyData'); // Import du modèle d'image
 const Appointment=require('./models/Appointment');
-
 const cron = require('node-cron');
 const ImageModel =require('./models/image');
 // Importez le module 'path'
@@ -22,11 +20,14 @@ const server = http.createServer(app);
 // Créez une instance de Socket.IO en passant le serveur HTTP créé précédemment
 const io = socketIo(server);
 
+app.use(express.json({ limit: '10mb' })); // Pour analyser les requêtes JSON
+app.use(express.urlencoded({ limit: '10mb', extended: true })); // Pour analyser les données URL-encoded
 
+/*
 // Middleware pour analyser les données de requête
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
-app.use(bodyParser )
+app.use(bodyParser )*/
 // Route pour récupérer tous les utilisateurs
 app.get('/Utilisateurs', async (req, res) => {
     try {
@@ -559,17 +560,16 @@ app.get('/temperature/:babyId', (req, res) => {
             });
     });
  
-       
+    app.get('/test', (req, res) => {
+      res.send('Le serveur fonctionne correctement !');
+  });
+  
 // Démarrage du serveur sur un port spécifique
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, '0.0.0.0', (err) => {
-  if (err) {
-      console.error(`Erreur lors du démarrage du serveur : ${err.message}`);
-      return;
-  }
-  console.log(`Serveur démarré sur le port ${PORT}`);
+// Démarrage du serveur sur un port spécifique
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+    console.log(`Serveur démarré sur le port ${PORT}`);
 });
-
 app.get('/TypesMedecins', async (req, res) => {
     try {
         // Récupérer tous les médecins de la base de données
