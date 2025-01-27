@@ -13,7 +13,6 @@ const Suivie = require('./models/invitation');
 const BabyData = require('./models/BabyData'); // Import du modèle d'image
 const Appointment=require('./models/Appointment');
 
-
 const cron = require('node-cron');
 const ImageModel =require('./models/image');
 // Importez le module 'path'
@@ -1353,3 +1352,5 @@ app.get('/TyypesMedecins', async (req, res) => {
       res.status(500).send("Erreur lors de la récupération des types de médecins");
   }
 });
+
+
