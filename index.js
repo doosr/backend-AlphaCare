@@ -26,6 +26,7 @@ const io = socketIo(server);
 // Middleware pour analyser les données de requête
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+app.use(bodyParser )
 // Route pour récupérer tous les utilisateurs
 app.get('/Utilisateurs', async (req, res) => {
     try {
@@ -145,59 +146,26 @@ console.log('Message envoyé : %s', info.messageId);
     }
 });
 
-
 app.get("/activation/:activationcode", async (req, res) => {
-    try {
-        const activationcode = req.params.activationcode;
-        // Recherche de l'utilisateur avec le code d'activation fourni
-        const utilisateur = await Utilisateur.findOneAndUpdate(
-            { activationCode: activationcode},
-            { isActive: true}, // Mettre à jour le champ isActive à true
-            { new: true } // Renvoyer le document mis à jour
-        );
-        if (utilisateur) {             
-            /*res.send("Votre compte a été activé avec succès.");*/
-            res.send(`
-            <html>
-                <head>
-                    <style>
-                        .message {
-                            font-size: 100px;
-                            font-family: Arial, sans-serif;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="message">
-                        Votre compte a été activé avec succès. 
-                    </div>
-                </body>
-            </html>
-        `);
-        } else {
-          res.status(404).send(`
-          <html>
-              <head>
-                  <style>
-                      .message {
-                          font-size: 100px;
-                          font-family: Arial, sans-serif;
-                      }
-                  </style>
-              </head>
-              <body>
-                  <div class="message">
-                      Code d'activation invalide.        
-                          </div>
-              </body>
-          </html>
-      `);
-            
-        }
-    } catch (err) {
-        console.log(err);
-        res.status(500).send("Erreur lors de l'activation du compte.");
-    }
+  try {
+      const activationcode = req.params.activationcode;
+      const utilisateur = await Utilisateur.findOneAndUpdate(
+          { activationCode: activationcode},
+          { isActive: true},
+          { new: true }
+      );
+      
+      if (utilisateur) {
+          // Renvoyer la page HTML avec le message de succès
+          res.sendFile(path.join(__dirname, 'views', 'activation.html'));
+      } else {
+          // Rediriger vers la même page avec un paramètre d'erreur
+          res.redirect('/activation.html?status=error');
+      }
+  } catch (err) {
+      console.log(err);
+      res.status(500).send("Erreur lors de l'activation du compte.");
+  }
 });
 
 // Route pour gérer la connexion d'un utilisateur
@@ -1354,3 +1322,101 @@ app.get('/TyypesMedecins', async (req, res) => {
 });
 
 
+// Modèle de message
+const messageSchema = new mongoose.Schema({
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'Utilisateur', required: true },
+  receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'Utilisateur', required: true },
+  content: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now },
+  read: { type: Boolean, default: false }
+});
+
+const Message = mongoose.model('Message', messageSchema);
+
+// Routes pour le chat
+module.exports = (app) => {
+  // Envoyer un message
+  app.post('/api/messages', verifyToken, async (req, res) => {
+      try {
+          const { receiverId, content } = req.body;
+          const message = new Message({
+              sender: req.user.userId,
+              receiver: receiverId,
+              content
+          });
+          await message.save();
+          
+          // Vous pouvez implémenter ici la notification en temps réel
+          
+          res.status(201).json(message);
+      } catch (error) {
+          res.status(500).json({ message: "Erreur lors de l'envoi du message" });
+      }
+  });
+
+  // Obtenir l'historique des messages
+  app.get('/api/messages/:otherUserId', verifyToken, async (req, res) => {
+      try {
+          const messages = await Message.find({
+              $or: [
+                  { sender: req.user.userId, receiver: req.params.otherUserId },
+                  { sender: req.params.otherUserId, receiver: req.user.userId }
+              ]
+          })
+          .sort({ timestamp: 1 })
+          .populate('sender', 'usrname usertype')
+          .populate('receiver', 'usrname usertype');
+          
+          res.json(messages);
+      } catch (error) {
+          res.status(500).json({ message: "Erreur lors de la récupération des messages" });
+      }
+  });
+
+  // Marquer les messages comme lus
+  app.put('/api/messages/read/:otherUserId', verifyToken, async (req, res) => {
+      try {
+          await Message.updateMany(
+              {
+                  sender: req.params.otherUserId,
+                  receiver: req.user.userId,
+                  read: false
+              },
+              { read: true }
+          );
+          res.json({ message: "Messages marqués comme lus" });
+      } catch (error) {
+          res.status(500).json({ message: "Erreur lors de la mise à jour des messages" });
+      }
+  });
+
+  // Obtenir la liste des conversations
+  app.get('/api/conversations', verifyToken, async (req, res) => {
+      try {
+          const messages = await Message.find({
+              $or: [
+                  { sender: req.user.userId },
+                  { receiver: req.user.userId }
+              ]
+          })
+          .sort({ timestamp: -1 })
+          .populate('sender', 'usrname usertype')
+          .populate('receiver', 'usrname usertype');
+
+          const conversations = {};
+          messages.forEach(msg => {
+              const otherUser = msg.sender._id.equals(req.user.userId) ? msg.receiver : msg.sender;
+              if (!conversations[otherUser._id]) {
+                  conversations[otherUser._id] = {
+                      user: otherUser,
+                      lastMessage: msg
+                  };
+              }
+          });
+
+          res.json(Object.values(conversations));
+      } catch (error) {
+          res.status(500).json({ message: "Erreur lors de la récupération des conversations" });
+      }
+  });
+};
