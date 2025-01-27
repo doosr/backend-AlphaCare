@@ -12,6 +12,7 @@ const path = require('path');
 const Suivie = require('./models/invitation');
 const BabyData = require('./models/BabyData'); // Import du modèle d'image
 const Appointment=require('./models/Appointment');
+const chatRoutes = require('./routes/chat');
 
 const cron = require('node-cron');
 const ImageModel =require('./models/image');
@@ -21,7 +22,7 @@ const app = express();
 const server = http.createServer(app);
 // Créez une instance de Socket.IO en passant le serveur HTTP créé précédemment
 const io = socketIo(server);
-
+app.use('/api', chatRoutes);
 
 
 // Middleware pour analyser les données de requête
@@ -115,7 +116,7 @@ app.post('/registre', async (req, res) => {
         await nouvelUtilisateur.save();
 
         // Configuration du lien d'activation (utilisez votre propre domaine)
-        const activationLink = `https://node-ykrm.onrender.com/activation/${activationCode}`;
+        const activationLink = `https://node-1lwj.onrender.com/activation/${activationCode}`;
 
         // Configuration du transporter Nodemailer
 
@@ -448,7 +449,7 @@ app.post('/upload-image', verifyToken, async (req, res) => {
       fs.writeFileSync(filePath, buffer);
   
       // Enregistrement de l'image dans la base de données
-      const imageUrl = `https://node-ykrm.onrender.com/uploads/${fileName}`;
+      const imageUrl = `https://node-1lwj.onrender.com/uploads/${fileName}`;
   
       // Mettre à jour l'URL de l'image dans le modèle Utilisateur
       utilisateur.image = imageUrl;
@@ -543,7 +544,7 @@ app.get('/temperature/:babyId', (req, res) => {
  
        
 // Démarrage du serveur sur un port spécifique
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 server.listen(PORT,/*'0.0.0.0',*/ () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
 });
