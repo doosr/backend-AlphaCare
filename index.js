@@ -1329,7 +1329,7 @@ const MedecinSchema = new mongoose.Schema({
     }
   });
 */
-app.get('/TypesMedecins', async (req, res) => {
+app.get('/TyypesMedecins', async (req, res) => {
   try {
       // Récupérer tous les médecins de la base de données
       const medecins = await Utilisateur.find({ usertype: 'Medecin' });
@@ -1340,14 +1340,14 @@ app.get('/TypesMedecins', async (req, res) => {
       }
 
       // Créer un tableau pour stocker les types de médecins avec leur nom et identifiant
-      const typesMedecins = medecins.map(medecin => ({
+      const tyypesMedecins = medecins.map(medecin => ({
           id: medecin._id.toString(), // Assurez-vous que l'ID est converti en chaîne de caractères
           nom: medecin.usrname, // Assurez-vous que le nom est bien défini
           type: medecin.usertype // Vérifiez que le type est bien défini
       }));
 
       // Envoyer la liste des types de médecins en réponse, avec un en-tête Content-Type explicitement défini
-      res.status(200).json(typesMedecins);
+      res.status(200).json(tyypesMedecins);
   } catch (erreur) {
       console.error(erreur);
       res.status(500).send("Erreur lors de la récupération des types de médecins");
