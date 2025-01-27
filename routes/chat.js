@@ -1,6 +1,37 @@
 const express = require('express');
 const router = express.Router();
-const Message = require('../models/message');
+const mongoose = require('mongoose');
+
+const MessageSchema = new mongoose.Schema({
+  conversation: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Conversation',
+    required: true,
+  },
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Utilisateur',
+    required: true,
+  },
+  content: {
+    type: String,
+    required: true,
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+  },
+  read: {
+    type: Boolean,
+    default: false,
+  },
+});
+
+const Message =
+  mongoose.models.Message || mongoose.model('Message', MessageSchema);
+
+module.exports = Message;
+
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     if (!authHeader) return res.status(401).send('Accès refusé. Token JWT manquant.');
