@@ -1219,7 +1219,7 @@ app.delete('/appointments/:id', async (req, res) => {
 
 
  
-
+/*
   // Schéma du Médecin
 const MedecinSchema = new mongoose.Schema({
     nom: String,
@@ -1328,31 +1328,28 @@ const MedecinSchema = new mongoose.Schema({
       });
     }
   });
+*/
+app.get('/TypesMedecins', async (req, res) => {
+  try {
+      // Récupérer tous les médecins de la base de données
+      const medecins = await Utilisateur.find({ usertype: 'Medecin' });
 
-  const doctorSchema = new mongoose.Schema({
-    nom: String,
-    type: String,
-    id: String, // L'ID unique du médecin
-  });
-  
-  const Doctor = mongoose.model('Doctor', doctorSchema);
-  
-  // Route pour récupérer la liste des médecins
-app.get('/api/doctors', async (req, res) => {
-  try {
-    const doctors = await Doctor.find();
-    res.status(200).json(doctors); // Retourner la liste des médecins
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur lors de la récupération des médecins' });
-  }
-});
-app.post('/api/doctors', async (req, res) => {
-  try {
-    const { nom, type, id } = req.body;
-    const newDoctor = new Doctor({ nom, type, id });
-    await newDoctor.save();
-    res.status(201).json(newDoctor);
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur lors de l\'ajout du médecin' });
+      // Vérifier si des médecins ont été trouvés
+      if (medecins.length === 0) {
+          return res.status(404).json({ message: 'Aucun médecin trouvé' });
+      }
+
+      // Créer un tableau pour stocker les types de médecins avec leur nom et identifiant
+      const typesMedecins = medecins.map(medecin => ({
+          id: medecin._id.toString(), // Assurez-vous que l'ID est converti en chaîne de caractères
+          nom: medecin.usrname, // Assurez-vous que le nom est bien défini
+          type: medecin.usertype // Vérifiez que le type est bien défini
+      }));
+
+      // Envoyer la liste des types de médecins en réponse, avec un en-tête Content-Type explicitement défini
+      res.status(200).json(typesMedecins);
+  } catch (erreur) {
+      console.error(erreur);
+      res.status(500).send("Erreur lors de la récupération des types de médecins");
   }
 });
