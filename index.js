@@ -561,9 +561,13 @@ app.get('/temperature/:babyId', (req, res) => {
  
        
 // Démarrage du serveur sur un port spécifique
-const PORT = process.env.PORT || 5000;
-server.listen(PORT,/*'0.0.0.0',*/ () => {
-    console.log(`Serveur démarré sur le port ${PORT}`);
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, '0.0.0.0', (err) => {
+  if (err) {
+      console.error(`Erreur lors du démarrage du serveur : ${err.message}`);
+      return;
+  }
+  console.log(`Serveur démarré sur le port ${PORT}`);
 });
 
 app.get('/TypesMedecins', async (req, res) => {
