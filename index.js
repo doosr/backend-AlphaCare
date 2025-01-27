@@ -545,7 +545,7 @@ app.get('/temperature/:babyId', (req, res) => {
        
 // Démarrage du serveur sur un port spécifique
 const PORT = process.env.PORT || 5000;
-server.listen(PORT,'0.0.0.0', () => {
+server.listen(PORT,/*'0.0.0.0',*/ () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
 });
 
