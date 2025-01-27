@@ -1329,5 +1329,30 @@ const MedecinSchema = new mongoose.Schema({
     }
   });
 
-
+  const doctorSchema = new mongoose.Schema({
+    nom: String,
+    type: String,
+    id: String, // L'ID unique du médecin
+  });
   
+  const Doctor = mongoose.model('Doctor', doctorSchema);
+  
+  // Route pour récupérer la liste des médecins
+app.get('/api/doctors', async (req, res) => {
+  try {
+    const doctors = await Doctor.find();
+    res.status(200).json(doctors); // Retourner la liste des médecins
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la récupération des médecins' });
+  }
+});
+app.post('/api/doctors', async (req, res) => {
+  try {
+    const { nom, type, id } = req.body;
+    const newDoctor = new Doctor({ nom, type, id });
+    await newDoctor.save();
+    res.status(201).json(newDoctor);
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de l\'ajout du médecin' });
+  }
+});
