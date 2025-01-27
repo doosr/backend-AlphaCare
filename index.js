@@ -12,7 +12,6 @@ const path = require('path');
 const Suivie = require('./models/invitation');
 const BabyData = require('./models/BabyData'); // Import du modèle d'image
 const Appointment=require('./models/Appointment');
-const chatRoutes = require('./routes/chat');
 
 const cron = require('node-cron');
 const ImageModel =require('./models/image');
@@ -22,7 +21,6 @@ const app = express();
 const server = http.createServer(app);
 // Créez une instance de Socket.IO en passant le serveur HTTP créé précédemment
 const io = socketIo(server);
-app.use('/api', chatRoutes);
 
 
 // Middleware pour analyser les données de requête
