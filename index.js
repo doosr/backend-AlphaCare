@@ -115,7 +115,7 @@ app.post('/registre', async (req, res) => {
         await nouvelUtilisateur.save();
 
         // Configuration du lien d'activation (utilisez votre propre domaine)
-        const activationLink = `https://node-1lwj.onrender.com/activation/${activationCode}`;
+        const activationLink = `http://192.168.100.48:5000/activation/${activationCode}`;
 
         // Configuration du transporter Nodemailer
 
@@ -146,6 +146,7 @@ console.log('Message envoyé : %s', info.messageId);
         res.status(500).send("Erreur lors de l'ajout de l'utilisateur");
     }
 });
+/*
 app.get("/activation/:activationcode", async (req, res) => {
   try {
       const activationcode = req.params.activationcode;
@@ -164,8 +165,8 @@ app.get("/activation/:activationcode", async (req, res) => {
       console.log(err);
       res.status(500).send("Erreur lors de l'activation du compte.");
   }
-});
-/*
+});*/
+
 app.get("/activation/:activationcode", async (req, res) => {
   try {
       const activationcode = req.params.activationcode;
@@ -187,7 +188,7 @@ app.get("/activation/:activationcode", async (req, res) => {
       res.status(500).send("Erreur lors de l'activation du compte.");
   }
 });
-*/
+
 // Route pour gérer la connexion d'un utilisateur
 app.post('/login', async (req, res) => {
     try {
@@ -467,7 +468,7 @@ app.post('/upload-image', verifyToken, async (req, res) => {
       fs.writeFileSync(filePath, buffer);
   
       // Enregistrement de l'image dans la base de données
-      const imageUrl = `https://node-1lwj.onrender.com/uploads/${fileName}`;
+      const imageUrl = `http://192.168.100.48:5000/uploads/${fileName}`;
   
       // Mettre à jour l'URL de l'image dans le modèle Utilisateur
       utilisateur.image = imageUrl;
@@ -560,14 +561,11 @@ app.get('/temperature/:babyId', (req, res) => {
             });
     });
  
-    app.get('/test', (req, res) => {
-      res.send('Le serveur fonctionne correctement !');
-  });
+   
   
 // Démarrage du serveur sur un port spécifique
-// Démarrage du serveur sur un port spécifique
 const PORT = process.env.PORT || 5000;
-server.listen(PORT,'0.0.0.0', () => {
+server.listen(PORT, () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
 });
 app.get('/TypesMedecins', async (req, res) => {
