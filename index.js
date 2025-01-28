@@ -146,6 +146,7 @@ console.log('Message envoyé : %s', info.messageId);
         res.status(500).send("Erreur lors de l'ajout de l'utilisateur");
     }
 });
+/*
 app.get("/activation/:activationcode", async (req, res) => {
   try {
       const activationcode = req.params.activationcode;
@@ -165,7 +166,7 @@ app.get("/activation/:activationcode", async (req, res) => {
       res.status(500).send("Erreur lors de l'activation du compte.");
   }
 });
-/*
+*/
 app.get("/activation/:activationcode", async (req, res) => {
   try {
       const activationcode = req.params.activationcode;
@@ -187,7 +188,7 @@ app.get("/activation/:activationcode", async (req, res) => {
       res.status(500).send("Erreur lors de l'activation du compte.");
   }
 });
-*/
+
 // Route pour gérer la connexion d'un utilisateur
 app.post('/login', async (req, res) => {
     try {
