@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require('mongoose');
 const Utilisateur = require('./models/utilisateur'); // Assurez-vous que le chemin d'accès est correct
+/*const bodyParser = require('body-parser');*/
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const jwt=require('jsonwebtoken');
@@ -19,15 +20,20 @@ const app = express();
 const server = http.createServer(app);
 // Créez une instance de Socket.IO en passant le serveur HTTP créé précédemment
 const io = socketIo(server);
+const messagesRoutes = require('./routes/messages'); // Ensure this is correct
+
+// Middleware and routes
+app.use('/api/messages', messagesRoutes);
 
 app.use(express.json({ limit: '10mb' })); // Pour analyser les requêtes JSON
 app.use(express.urlencoded({ limit: '10mb', extended: true })); // Pour analyser les données URL-encoded
 
-/*
+
 // Middleware pour analyser les données de requête
+/*
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
-app.use(bodyParser )*/
+app.use(bodyParser );*/
 // Route pour récupérer tous les utilisateurs
 app.get('/Utilisateurs', async (req, res) => {
     try {
@@ -480,7 +486,53 @@ app.post('/upload-image', verifyToken, async (req, res) => {
       res.status(500).json({ error: 'Erreur lors de l\'enregistrement de l\'image' });
     }
   });
- 
+  app.get('/user/:userId/image', verifyToken, async (req, res) => {
+    try {
+      const userId = req.params.userId;
+  
+      // Récupérer l'utilisateur à partir de la base de données
+      const utilisateur = await Utilisateur.findById(userId);
+      if (!utilisateur) {
+        return res.status(404).json({ error: 'Utilisateur non trouvé' });
+      }
+  
+      // Vérifier si l'utilisateur a une image enregistrée
+      if (!utilisateur.image) {
+        return res.status(404).json({ error: 'Aucune image trouvée pour cet utilisateur' });
+      }
+  
+      // Récupérer le chemin relatif de l'image
+      const imagePath = utilisateur.image;
+  
+      // Construire le chemin absolu vers le fichier image
+      const absoluteImagePath = path.join(__dirname, 'uploads', path.basename(imagePath));
+  
+      // Vérifier si le fichier image existe
+      if (!fs.existsSync(absoluteImagePath)) {
+        return res.status(404).json({ error: 'Fichier image introuvable' });
+      }
+  
+      // Utilisation d'un flux pour envoyer l'image
+      const readStream = fs.createReadStream(absoluteImagePath);
+  
+      // Définir l'en-tête pour envoyer l'image au client
+      res.setHeader('Content-Type', 'image/jpeg');
+  
+      // Envoi de l'image via le flux
+      readStream.pipe(res);
+  
+      // Optionnel: écouter les erreurs liées au flux
+      readStream.on('error', (err) => {
+        console.error('Erreur lors de l\'envoi de l\'image :', err);
+        res.status(500).json({ error: 'Erreur lors de l\'envoi de l\'image' });
+      });
+  
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'image :', error);
+      res.status(500).json({ error: 'Erreur lors de la récupération de l\'image' });
+    }
+  });
+  /*
 // Route pour récupérer l'image d'un utilisateur
 app.get('/user/:userId/image', verifyToken, async (req, res) => {
   try {
@@ -526,7 +578,7 @@ app.get('/user/:userId/image', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la récupération de l\'image' });
   }
 });
-
+*/
   
 // Connexion à la base de données MongoDB
 mongoose.connect('mongodb+srv://demo_user:dmGxGOJYzrXNYITg@cluster0.qkg2qo9.mongodb.net/mydatabase?retryWrites=true&w=majority')
@@ -626,127 +678,176 @@ let heartbeatInterval = 1; // 15 minutes
 
 // Gérez la connexion Socket.IO
 var userConnected=[]
-io.on('connection', (socket) => {
-    console.log(`⚡: ${socket.id} user just connected`);
-    console.log(userConnected)
-    socket.on('userConnected',(data)=>{
-        if(data!=''){
-            userConnected.push({idUser:data,idSocket:socket.id})
-            console.log(userConnected)
 
-        }
-    })
-  
-    // Écoute de l'événement pour obtenir l'ID du bébé
-  socket.on('getBabyId', () => {
-    fs.readFile('baby_id.txt', 'utf8', (err, data) => {
-      if (err) {
-        console.error('Error reading baby_id.txt:', err);
-        return;
-      }
-      // Émettre l'ID du bébé au client
-      socket.emit('babyId', { babyId: data });
-    });
-  });
-// Gestion de la suppression hebdomadaire des données de BabyData
-async function deleteOldBabyData() {
+module.exports = (server) => {
+  const io = socketIo(server);
+  let userConnected = [];
+  let temperatureInterval = 30; // valeur par défaut en secondes
+  let heartbeatInterval = 30; // valeur par défaut en secondes
+
+  // Middleware d'authentification pour Socket.IO
+  io.use((socket, next) => {
     try {
-      // Calcul de la date il y a une semaine
+      const token = socket.handshake.auth.token;
+      if (!token) {
+        return next(new Error('Authentication error'));
+      }
+      
+      jwt.verify(token, 'votre_secret_key', (err, decoded) => {
+        if (err) return next(new Error('Authentication error'));
+        socket.user = decoded;
+        next();
+      });
+    } catch (err) {
+      next(new Error('Authentication error'));
+    }
+  });
+
+  // Fonction de suppression des anciennes données
+  async function deleteOldBabyData() {
+    try {
       const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  
-      // Suppression des données de BabyData plus anciennes qu'une semaine
       const deleted = await BabyData.deleteMany({ createdAt: { $lt: oneWeekAgo } });
       console.log(`${deleted.deletedCount} données de BabyData supprimées.`);
     } catch (error) {
       console.error('Erreur lors de la suppression des anciennes données de BabyData :', error);
     }
   }
-  
-  // Cron job pour la suppression hebdomadaire des données de BabyData
+
+  // Configuration du cron job
   cron.schedule('0 0 * * 0', deleteOldBabyData, {
     scheduled: true,
     timezone: 'Europe/Paris'
   });
-  
-  // Lors de la réception des données de température
-  socket.on('updateTemperature', async (data) => {
-    try {
-      // Recherchez l'utilisateur correspondant au baby_id dans la base de données
-      const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
-      if (!utilisateur) {
-        console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
-        return;
-      }
-  
-      // Créez un nouvel enregistrement de BabyData
-      const babyData = new BabyData({
-        baby_id: data.baby_id,
-        temperature: data.bebe_temperature,
-        // Ajoutez d'autres champs si nécessaire
-      });
-      await babyData.save();
-  
-      // Mettez à jour les données de température du bébé dans la base de données
-      utilisateur.bebe.bebe_temperature = data.bebe_temperature;
-      utilisateur.bebe.ambient_temperature = data.ambient_temperature;
-      await utilisateur.save();
-  
-      console.log('Données de température mises à jour pour le bébé ID :', data.baby_id);
-      io.emit('updateTemperatureSuccess', { message: 'Température mise à jour avec succès', data });
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour des données de température :', error);
-    }
-  });
-  // Écouter l'événement pour mettre à jour les intervalles de lecture
-socket.on('updateIntervals', (data) => {
-    temperatureInterval = data.temperature_interval || temperatureInterval;
-    heartbeatInterval = data.heartbeat_interval || heartbeatInterval;
-    console.log(`Intervalles de lecture mis à jour : Température = ${temperatureInterval} secondes, BPM/SpO2 = ${heartbeatInterval} secondes`);
-  
-    // Émettre un événement pour notifier les clients des nouveaux intervalles
-    io.emit('updateIntervals', { temperature_interval: temperatureInterval, heartbeat_interval: heartbeatInterval });
-  });
-  
 
-  
-  // Lors de la réception des données de battement de cœur
-  socket.on('updateHeartbeat', async (data) => {
-    try {
-      // Recherchez l'utilisateur correspondant au baby_id dans la base de données
-      const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
-      if (!utilisateur) {
-        console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
-        return;
+  // Gestion des connexions
+  io.on('connection', (socket) => {
+    console.log(`User connected: ${socket.user.usrname}`);
+    socket.join(socket.user.userId);
+
+    // Gestion de la connexion utilisateur
+    socket.on('userConnected', (data) => {
+      if (data !== '') {
+        userConnected.push({ idUser: data, idSocket: socket.id });
+        console.log('Connected users:', userConnected);
       }
-  
-      // Créez un nouvel enregistrement de BabyData
-      const babyData = new BabyData({
-        baby_id: data.baby_id,
-        bpm: data.last_bpm,
-        spo2: data.last_spo2,
-        temperature: data.bebe_temperature,
-        // Ajoutez d'autres champs si nécessaire
-      });
-      await babyData.save();
-  
-      // Mettez à jour les données de fréquence cardiaque et de SpO2 du bébé dans la base de données
-      utilisateur.bebe.last_bpm = data.last_bpm;
-      utilisateur.bebe.last_spo2 = data.last_spo2;
-      await utilisateur.save();
-  
-      console.log('Données de fréquence cardiaque et de SpO2 mises à jour pour le bébé ID :', data.baby_id);
-      io.emit('updateHeartbeatSuccess', { message: 'Heartbeat mise à jour avec succès', data });
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour des données de fréquence cardiaque et de SpO2 :', error);
-    }
-  });
-    // Gérez la déconnexion du client si nécessaire
-    socket.on('disconnect', () => {
-        console.log('User disconnected');
-        userConnected.splice(userConnected.findIndex((el)=>el.idSocket==socket.id),1)
-        console.log(userConnected)
     });
-});
+
+    // Gestion des messages
+    socket.on('message', async (data) => {
+      try {
+        const { receiverId, content } = data;
+        
+        const message = new Message({
+          sender: socket.user.userId,
+          receiver: receiverId,
+          content: content
+        });
+        
+        await message.save();
+        
+        const populatedMessage = await Message.findById(message._id)
+          .populate('sender', 'usrname usertype')
+          .populate('receiver', 'usrname usertype');
+
+        io.to(socket.user.userId).to(receiverId).emit('message', populatedMessage);
+        
+      } catch (error) {
+        console.error('Error saving message:', error);
+        socket.emit('error', { message: 'Error sending message' });
+      }
+    });
+
+    // Gestion de l'ID du bébé
+    socket.on('getBabyId', () => {
+      fs.readFile('baby_id.txt', 'utf8', (err, data) => {
+        if (err) {
+          console.error('Error reading baby_id.txt:', err);
+          return;
+        }
+        socket.emit('babyId', { babyId: data });
+      });
+    });
+
+    // Mise à jour des intervalles
+    socket.on('updateIntervals', (data) => {
+      temperatureInterval = data.temperature_interval || temperatureInterval;
+      heartbeatInterval = data.heartbeat_interval || heartbeatInterval;
+      console.log(`Intervalles mis à jour : Temp = ${temperatureInterval}s, BPM/SpO2 = ${heartbeatInterval}s`);
+      io.emit('updateIntervals', { 
+        temperature_interval: temperatureInterval, 
+        heartbeat_interval: heartbeatInterval 
+      });
+    });
+
+    // Mise à jour de la température
+    socket.on('updateTemperature', async (data) => {
+      try {
+        const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
+        if (!utilisateur) {
+          console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
+          return;
+        }
+
+        const babyData = new BabyData({
+          baby_id: data.baby_id,
+          temperature: data.bebe_temperature
+        });
+        await babyData.save();
+
+        utilisateur.bebe.bebe_temperature = data.bebe_temperature;
+        utilisateur.bebe.ambient_temperature = data.ambient_temperature;
+        await utilisateur.save();
+
+        io.emit('updateTemperatureSuccess', { 
+          message: 'Température mise à jour avec succès', 
+          data 
+        });
+      } catch (error) {
+        console.error('Erreur mise à jour température:', error);
+      }
+    });
+
+    // Mise à jour des battements de cœur
+    socket.on('updateHeartbeat', async (data) => {
+      try {
+        const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
+        if (!utilisateur) {
+          console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
+          return;
+        }
+
+        const babyData = new BabyData({
+          baby_id: data.baby_id,
+          bpm: data.last_bpm,
+          spo2: data.last_spo2,
+          temperature: data.bebe_temperature
+        });
+        await babyData.save();
+
+        utilisateur.bebe.last_bpm = data.last_bpm;
+        utilisateur.bebe.last_spo2 = data.last_spo2;
+        await utilisateur.save();
+
+        io.emit('updateHeartbeatSuccess', { 
+          message: 'Heartbeat mise à jour avec succès', 
+          data 
+        });
+      } catch (error) {
+        console.error('Erreur mise à jour heartbeat:', error);
+      }
+    });
+
+    // Gestion de la déconnexion
+    socket.on('disconnect', () => {
+      console.log(`User disconnected: ${socket.user.usrname}`);
+      userConnected = userConnected.filter(user => user.idSocket !== socket.id);
+      console.log('Remaining connected users:', userConnected);
+    });
+  });
+
+  return io;
+};
 // Route pour recevoir l'ID du bébé
 app.post('/babyId', (req, res) => {
     const { babyId } = req.body;
@@ -1051,31 +1152,6 @@ function isValidAppointment(appointmentData) {
     );
   }
  // Route pour mettre à jour la dernière date et heure de visite d'un rendez-vous spécifique
-/*app.put('/appointments/:id', async (req, res) => {
-    try {
-        const appointmentId = req.params.id;
-        const { lastVisitDateTime } = req.body;
-
-        // Mettre à jour la dernière date et heure de visite du rendez-vous spécifique
-        const updatedAppointment = await Appointment.findByIdAndUpdate(appointmentId, { $set: { lastVisitDateTime } }, { new: true });
-
-        // Trouver l'utilisateur (médecin) pour le rendez-vous mis à jour
-        const doctorUser = await Utilisateur.findById(updatedAppointment.doctor);
-        const exist = userConnected.find((el) => el.idUser == doctorUser._id); // Assurez-vous que userConnected est disponible
-
-        // Envoyer la notification de mise à jour au médecin via la socket
-        if (exist) {
-            io.to(exist.idSocket).emit('updateAppointment', updatedAppointment);
-            console.log('Socket de mise à jour envoyée');
-        }
-
-        return res.status(200).json({ message: 'Last visit date and time updated successfully' });
-    } catch (error) {
-        console.error('Error updating last visit date and time:', error);
-        return res.status(500).json({ message: 'Internal server error' });
-    }
-});*/
- // Route pour mettre à jour la dernière date et heure de visite d'un rendez-vous spécifique
 app.put('/appointments/:id', async (req, res) => {
     try {
         const appointmentId = req.params.id;
@@ -1229,4 +1305,5 @@ app.get('/TyypesMedecins', async (req, res) => {
       res.status(500).send("Erreur lors de la récupération des types de médecins");
   }
 });
+
 
