@@ -517,7 +517,8 @@ app.post('/upload-image', verifyToken, async (req, res) => {
   
       // Définir l'en-tête pour envoyer l'image au client
       res.setHeader('Content-Type', 'image/jpeg');
-  
+      io.emit('imageRetrieved', { imageUrl: utilisateur.image });
+
       // Envoi de l'image via le flux
       readStream.pipe(res);
   
@@ -678,177 +679,127 @@ let heartbeatInterval = 1; // 15 minutes
 
 // Gérez la connexion Socket.IO
 var userConnected=[]
+io.on('connection', (socket) => {
+    console.log(`⚡: ${socket.id} user just connected`);
+    console.log(userConnected)
+    socket.on('userConnected',(data)=>{
+        if(data!=''){
+            userConnected.push({idUser:data,idSocket:socket.id})
+            console.log(userConnected)
 
-module.exports = (server) => {
-  const io = socketIo(server);
-  let userConnected = [];
-  let temperatureInterval = 30; // valeur par défaut en secondes
-  let heartbeatInterval = 30; // valeur par défaut en secondes
-
-  // Middleware d'authentification pour Socket.IO
-  io.use((socket, next) => {
-    try {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        return next(new Error('Authentication error'));
+        }
+    })
+  
+    // Écoute de l'événement pour obtenir l'ID du bébé
+  socket.on('getBabyId', () => {
+    fs.readFile('baby_id.txt', 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading baby_id.txt:', err);
+        return;
       }
-      
-      jwt.verify(token, 'votre_secret_key', (err, decoded) => {
-        if (err) return next(new Error('Authentication error'));
-        socket.user = decoded;
-        next();
-      });
-    } catch (err) {
-      next(new Error('Authentication error'));
-    }
+      // Émettre l'ID du bébé au client
+      socket.emit('babyId', { babyId: data });
+    });
   });
-
-  // Fonction de suppression des anciennes données
-  async function deleteOldBabyData() {
+// Gestion de la suppression hebdomadaire des données de BabyData
+async function deleteOldBabyData() {
     try {
+      // Calcul de la date il y a une semaine
       const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  
+      // Suppression des données de BabyData plus anciennes qu'une semaine
       const deleted = await BabyData.deleteMany({ createdAt: { $lt: oneWeekAgo } });
       console.log(`${deleted.deletedCount} données de BabyData supprimées.`);
     } catch (error) {
       console.error('Erreur lors de la suppression des anciennes données de BabyData :', error);
     }
   }
-
-  // Configuration du cron job
+  
+  // Cron job pour la suppression hebdomadaire des données de BabyData
   cron.schedule('0 0 * * 0', deleteOldBabyData, {
     scheduled: true,
     timezone: 'Europe/Paris'
   });
-
-  // Gestion des connexions
-  io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.user.usrname}`);
-    socket.join(socket.user.userId);
-
-    // Gestion de la connexion utilisateur
-    socket.on('userConnected', (data) => {
-      if (data !== '') {
-        userConnected.push({ idUser: data, idSocket: socket.id });
-        console.log('Connected users:', userConnected);
+  
+  // Lors de la réception des données de température
+  socket.on('updateTemperature', async (data) => {
+    try {
+      // Recherchez l'utilisateur correspondant au baby_id dans la base de données
+      const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
+      if (!utilisateur) {
+        console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
+        return;
       }
-    });
-
-    // Gestion des messages
-    socket.on('message', async (data) => {
-      try {
-        const { receiverId, content } = data;
-        
-        const message = new Message({
-          sender: socket.user.userId,
-          receiver: receiverId,
-          content: content
-        });
-        
-        await message.save();
-        
-        const populatedMessage = await Message.findById(message._id)
-          .populate('sender', 'usrname usertype')
-          .populate('receiver', 'usrname usertype');
-
-        io.to(socket.user.userId).to(receiverId).emit('message', populatedMessage);
-        
-      } catch (error) {
-        console.error('Error saving message:', error);
-        socket.emit('error', { message: 'Error sending message' });
-      }
-    });
-
-    // Gestion de l'ID du bébé
-    socket.on('getBabyId', () => {
-      fs.readFile('baby_id.txt', 'utf8', (err, data) => {
-        if (err) {
-          console.error('Error reading baby_id.txt:', err);
-          return;
-        }
-        socket.emit('babyId', { babyId: data });
+  
+      // Créez un nouvel enregistrement de BabyData
+      const babyData = new BabyData({
+        baby_id: data.baby_id,
+        temperature: data.bebe_temperature,
+        // Ajoutez d'autres champs si nécessaire
       });
-    });
-
-    // Mise à jour des intervalles
-    socket.on('updateIntervals', (data) => {
-      temperatureInterval = data.temperature_interval || temperatureInterval;
-      heartbeatInterval = data.heartbeat_interval || heartbeatInterval;
-      console.log(`Intervalles mis à jour : Temp = ${temperatureInterval}s, BPM/SpO2 = ${heartbeatInterval}s`);
-      io.emit('updateIntervals', { 
-        temperature_interval: temperatureInterval, 
-        heartbeat_interval: heartbeatInterval 
-      });
-    });
-
-    // Mise à jour de la température
-    socket.on('updateTemperature', async (data) => {
-      try {
-        const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
-        if (!utilisateur) {
-          console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
-          return;
-        }
-
-        const babyData = new BabyData({
-          baby_id: data.baby_id,
-          temperature: data.bebe_temperature
-        });
-        await babyData.save();
-
-        utilisateur.bebe.bebe_temperature = data.bebe_temperature;
-        utilisateur.bebe.ambient_temperature = data.ambient_temperature;
-        await utilisateur.save();
-
-        io.emit('updateTemperatureSuccess', { 
-          message: 'Température mise à jour avec succès', 
-          data 
-        });
-      } catch (error) {
-        console.error('Erreur mise à jour température:', error);
-      }
-    });
-
-    // Mise à jour des battements de cœur
-    socket.on('updateHeartbeat', async (data) => {
-      try {
-        const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
-        if (!utilisateur) {
-          console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
-          return;
-        }
-
-        const babyData = new BabyData({
-          baby_id: data.baby_id,
-          bpm: data.last_bpm,
-          spo2: data.last_spo2,
-          temperature: data.bebe_temperature
-        });
-        await babyData.save();
-
-        utilisateur.bebe.last_bpm = data.last_bpm;
-        utilisateur.bebe.last_spo2 = data.last_spo2;
-        await utilisateur.save();
-
-        io.emit('updateHeartbeatSuccess', { 
-          message: 'Heartbeat mise à jour avec succès', 
-          data 
-        });
-      } catch (error) {
-        console.error('Erreur mise à jour heartbeat:', error);
-      }
-    });
-
-    // Gestion de la déconnexion
-    socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.user.usrname}`);
-      userConnected = userConnected.filter(user => user.idSocket !== socket.id);
-      console.log('Remaining connected users:', userConnected);
-    });
+      await babyData.save();
+  
+      // Mettez à jour les données de température du bébé dans la base de données
+      utilisateur.bebe.bebe_temperature = data.bebe_temperature;
+      utilisateur.bebe.ambient_temperature = data.ambient_temperature;
+      await utilisateur.save();
+  
+      console.log('Données de température mises à jour pour le bébé ID :', data.baby_id);
+      io.emit('updateTemperatureSuccess', { message: 'Température mise à jour avec succès', data });
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour des données de température :', error);
+    }
   });
+  // Écouter l'événement pour mettre à jour les intervalles de lecture
+socket.on('updateIntervals', (data) => {
+    temperatureInterval = data.temperature_interval || temperatureInterval;
+    heartbeatInterval = data.heartbeat_interval || heartbeatInterval;
+    console.log(`Intervalles de lecture mis à jour : Température = ${temperatureInterval} secondes, BPM/SpO2 = ${heartbeatInterval} secondes`);
+  
+    // Émettre un événement pour notifier les clients des nouveaux intervalles
+    io.emit('updateIntervals', { temperature_interval: temperatureInterval, heartbeat_interval: heartbeatInterval });
+  });
+  
 
-  return io;
-};
-// Route pour recevoir l'ID du bébé
+  
+  // Lors de la réception des données de battement de cœur
+  socket.on('updateHeartbeat', async (data) => {
+    try {
+      // Recherchez l'utilisateur correspondant au baby_id dans la base de données
+      const utilisateur = await Utilisateur.findOne({ 'bebe._id': data.baby_id });
+      if (!utilisateur) {
+        console.log('Utilisateur non trouvé pour le baby_id :', data.baby_id);
+        return;
+      }
+  
+      // Créez un nouvel enregistrement de BabyData
+      const babyData = new BabyData({
+        baby_id: data.baby_id,
+        bpm: data.last_bpm,
+        spo2: data.last_spo2,
+        temperature: data.bebe_temperature,
+        // Ajoutez d'autres champs si nécessaire
+      });
+      await babyData.save();
+  
+      // Mettez à jour les données de fréquence cardiaque et de SpO2 du bébé dans la base de données
+      utilisateur.bebe.last_bpm = data.last_bpm;
+      utilisateur.bebe.last_spo2 = data.last_spo2;
+      await utilisateur.save();
+  
+      console.log('Données de fréquence cardiaque et de SpO2 mises à jour pour le bébé ID :', data.baby_id);
+      io.emit('updateHeartbeatSuccess', { message: 'Heartbeat mise à jour avec succès', data });
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour des données de fréquence cardiaque et de SpO2 :', error);
+    }
+  });
+    // Gérez la déconnexion du client si nécessaire
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
+        userConnected.splice(userConnected.findIndex((el)=>el.idSocket==socket.id),1)
+        console.log(userConnected)
+    });
+});// Route pour recevoir l'ID du bébé
 app.post('/babyId', (req, res) => {
     const { babyId } = req.body;
     
