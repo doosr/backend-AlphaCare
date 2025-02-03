@@ -14,16 +14,18 @@ const BabyData = require('./models/BabyData'); // Import du modèle d'image
 const Appointment=require('./models/Appointment');
 const cron = require('node-cron');
 const ImageModel =require('./models/image');
-// Importez le module 'path'
+const cors = require('cors');
 
+// Importez le module 'path'
 const app = express();
-const server = http.createServer(app);
-// Créez une instance de Socket.IO en passant le serveur HTTP créé précédemment
-const io = socketIo(server);
-const messagesRoutes = require('./routes/messages'); // Ensure this is correct
+const server = require('http').createServer(app);
+const io = require('socket.io')(server);
+const socketHandler = require('./socketHandler');
+socketHandler(io);
+
 
 // Middleware and routes
-app.use('/api/messages', messagesRoutes);
+app.use('/api/messages', require('./routes/messages'));
 
 app.use(express.json({ limit: '10mb' })); // Pour analyser les requêtes JSON
 app.use(express.urlencoded({ limit: '10mb', extended: true })); // Pour analyser les données URL-encoded
@@ -676,6 +678,7 @@ app.post('/invitation/send', verifyToken, async (req, res) => {
 // Intervalles de lecture initiaux (en secondes)
 let temperatureInterval = 1; // 30 minutes
 let heartbeatInterval = 1; // 15 minutes
+const intervalLimits = { min: 1, max: 3600 }; // 1 seconde à 1 heure
 
 // Gérez la connexion Socket.IO
 var userConnected=[]
@@ -688,8 +691,38 @@ io.on('connection', (socket) => {
             console.log(userConnected)
 
         }
-    })
-  
+    });
+    // Rejoindre la room utilisateur
+  socket.on('joinUserRoom', (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined room`);
+  });
+
+  // Écoute des messages
+  socket.on('sendMessage', async ({ senderId, receiverId, content }) => {
+    try {
+      // Sauvegarder le message
+      const message = new Message({
+        sender: senderId,
+        receiver: receiverId,
+        content
+      });
+      await message.save();
+
+      // Diffuser au destinataire
+      io.to(receiverId).emit('newMessage', message);
+      
+      // Accusé de réception
+      socket.emit('messageDelivered', message._id);
+    } catch (error) {
+      console.error('Erreur message:', error);
+    }
+  });
+  // Marquer comme lu
+  socket.on('markAsRead', async (messageId) => {
+    await Message.findByIdAndUpdate(messageId, { read: true });
+  });
+ 
     // Écoute de l'événement pour obtenir l'ID du bébé
   socket.on('getBabyId', () => {
     fs.readFile('baby_id.txt', 'utf8', (err, data) => {
@@ -751,14 +784,64 @@ async function deleteOldBabyData() {
     }
   });
   // Écouter l'événement pour mettre à jour les intervalles de lecture
-socket.on('updateIntervals', (data) => {
+/*socket.on('updateIntervals', (data) => {
     temperatureInterval = data.temperature_interval || temperatureInterval;
     heartbeatInterval = data.heartbeat_interval || heartbeatInterval;
     console.log(`Intervalles de lecture mis à jour : Température = ${temperatureInterval} secondes, BPM/SpO2 = ${heartbeatInterval} secondes`);
   
     // Émettre un événement pour notifier les clients des nouveaux intervalles
     io.emit('updateIntervals', { temperature_interval: temperatureInterval, heartbeat_interval: heartbeatInterval });
-  });
+  });*/
+  // Envoi initial des intervalles actuels
+  socket.emit('intervalsUpdated', {
+    temperature: temperatureInterval,
+    heartbeat: heartbeatInterval
+});
+  // Gestion des mises à jour d'intervalles
+  socket.on('updateIntervals', (data) => {
+    try {
+        // Validation des données
+        if (!data || typeof data !== 'object') {
+            throw new Error('Format de données invalide');
+        }
+
+        // Conversion et validation des intervalles
+        const newTempInterval = validateInterval(data.temperature_interval);
+        const newHeartInterval = validateInterval(data.heartbeat_interval);
+
+        // Mise à jour atomique des variables
+        temperatureInterval = newTempInterval;
+        heartbeatInterval = newHeartInterval;
+
+        console.log(`Nouveaux intervalles - Temp: ${temperatureInterval}s, Coeur: ${heartbeatInterval}s`);
+
+        // Diffusion à tous les clients
+        io.emit('intervalsUpdated', {
+            temperature: temperatureInterval,
+            heartbeat: heartbeatInterval
+        });
+
+    } catch (error) {
+        console.error('Erreur intervalle:', error.message);
+        socket.emit('intervalError', {
+            message: error.message,
+            received: data
+        });
+    }
+
+
+// Fonction de validation d'intervalle
+function validateInterval(value) {
+    const numValue = Number(value);
+    if (isNaN(numValue)) throw new Error('Valeur numérique invalide');
+    if (numValue % 1 !== 0) throw new Error('Doit être un entier');
+    if (numValue < intervalLimits.min || numValue > intervalLimits.max) {
+        throw new Error(`Intervalle doit être entre ${intervalLimits.min} et ${intervalLimits.max} secondes`);
+    }
+    return numValue;
+}
+});
+
   
 
   
