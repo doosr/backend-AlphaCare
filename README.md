@@ -1,6 +1,7 @@
 # 🧠 AlphaCare Backend
 
-Le backend de l'application **AlphaCare**, une solution IoT intelligente dédiée à la santé des bébés. Ce backend gère l'authentification, les utilisateurs (parents et médecins), les profils de bébés, les rendez-vous médicaux, et intègre un système d’analyse intelligente des pleurs.
+Le backend de l'application **AlphaCare**, une solution IoT intelligente dédiée à la **santé et au suivi médical des bébés**. Ce backend gère l'authentification, les comptes utilisateurs (parents et médecins), les profils de bébés, les rendez-vous médicaux, ainsi que toutes les données de suivi de santé (température, soins, etc.).
+
 
 ---
 
